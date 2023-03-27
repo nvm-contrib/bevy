@@ -91,7 +91,7 @@ impl DynamicScene {
             // or spawn a new entity with a transiently unique id if there is
             // no corresponding entry.
             let entity = *entity_map
-                .entry(bevy_ecs::entity::Entity::from_raw(scene_entity.entity))
+                .entry(bevy_ecs::entity::Entity::try_from_raw(scene_entity.entity).unwrap())
                 .or_insert_with(|| world.spawn_empty().id());
             let entity_mut = &mut world.entity_mut(entity);
 

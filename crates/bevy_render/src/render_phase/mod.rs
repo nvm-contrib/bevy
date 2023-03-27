@@ -301,46 +301,46 @@ mod tests {
         let mut render_phase = RenderPhase::<TestPhaseItem>::default();
         let items = [
             TestPhaseItem {
-                entity: Entity::from_raw(0),
+                entity: Entity::try_from_raw(1).unwrap(),
                 batch_range: Some(0..5),
             },
             // This item should be batched
             TestPhaseItem {
-                entity: Entity::from_raw(0),
+                entity: Entity::try_from_raw(1).unwrap(),
                 batch_range: Some(5..10),
             },
             TestPhaseItem {
-                entity: Entity::from_raw(1),
+                entity: Entity::try_from_raw(2).unwrap(),
                 batch_range: Some(0..5),
             },
             TestPhaseItem {
-                entity: Entity::from_raw(0),
+                entity: Entity::try_from_raw(1).unwrap(),
                 batch_range: Some(10..15),
             },
             TestPhaseItem {
-                entity: Entity::from_raw(1),
+                entity: Entity::try_from_raw(2).unwrap(),
                 batch_range: Some(5..10),
             },
             TestPhaseItem {
-                entity: Entity::from_raw(1),
+                entity: Entity::try_from_raw(2).unwrap(),
                 batch_range: None,
             },
             TestPhaseItem {
-                entity: Entity::from_raw(1),
+                entity: Entity::try_from_raw(2).unwrap(),
                 batch_range: Some(10..15),
             },
             TestPhaseItem {
-                entity: Entity::from_raw(1),
+                entity: Entity::try_from_raw(2).unwrap(),
                 batch_range: Some(20..25),
             },
             // This item should be batched
             TestPhaseItem {
-                entity: Entity::from_raw(1),
+                entity: Entity::try_from_raw(2).unwrap(),
                 batch_range: Some(25..30),
             },
             // This item should be batched
             TestPhaseItem {
-                entity: Entity::from_raw(1),
+                entity: Entity::try_from_raw(2).unwrap(),
                 batch_range: Some(30..35),
             },
         ];
@@ -350,31 +350,31 @@ mod tests {
         render_phase.batch();
         let items_batched = [
             TestPhaseItem {
-                entity: Entity::from_raw(0),
+                entity: Entity::try_from_raw(1).unwrap(),
                 batch_range: Some(0..10),
             },
             TestPhaseItem {
-                entity: Entity::from_raw(1),
+                entity: Entity::try_from_raw(2).unwrap(),
                 batch_range: Some(0..5),
             },
             TestPhaseItem {
-                entity: Entity::from_raw(0),
+                entity: Entity::try_from_raw(1).unwrap(),
                 batch_range: Some(10..15),
             },
             TestPhaseItem {
-                entity: Entity::from_raw(1),
+                entity: Entity::try_from_raw(2).unwrap(),
                 batch_range: Some(5..10),
             },
             TestPhaseItem {
-                entity: Entity::from_raw(1),
+                entity: Entity::try_from_raw(2).unwrap(),
                 batch_range: None,
             },
             TestPhaseItem {
-                entity: Entity::from_raw(1),
+                entity: Entity::try_from_raw(2).unwrap(),
                 batch_range: Some(10..15),
             },
             TestPhaseItem {
-                entity: Entity::from_raw(1),
+                entity: Entity::try_from_raw(2).unwrap(),
                 batch_range: Some(20..35),
             },
         ];

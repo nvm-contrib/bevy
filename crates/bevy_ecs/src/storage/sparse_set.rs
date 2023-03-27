@@ -642,11 +642,11 @@ mod tests {
     #[test]
     fn sparse_set() {
         let mut set = SparseSet::<Entity, Foo>::default();
-        let e0 = Entity::from_raw(0);
-        let e1 = Entity::from_raw(1);
-        let e2 = Entity::from_raw(2);
-        let e3 = Entity::from_raw(3);
-        let e4 = Entity::from_raw(4);
+        let e0 = Entity::try_from_raw(1).unwrap();
+        let e1 = Entity::try_from_raw(2).unwrap();
+        let e2 = Entity::try_from_raw(3).unwrap();
+        let e3 = Entity::try_from_raw(4).unwrap();
+        let e4 = Entity::try_from_raw(5).unwrap();
 
         set.insert(e1, Foo(1));
         set.insert(e2, Foo(2));

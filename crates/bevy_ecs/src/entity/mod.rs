@@ -44,7 +44,7 @@ use crate::{
     storage::{SparseSetIndex, TableId, TableRow},
 };
 use serde::{Deserialize, Serialize};
-use std::{convert::TryFrom, fmt, mem, sync::atomic::Ordering};
+use std::{convert::TryFrom, fmt, mem, sync::atomic::Ordering, num::NonZeroU32};
 
 #[cfg(target_has_atomic = "64")]
 use std::sync::atomic::AtomicI64 as AtomicIdCursor;
@@ -118,7 +118,7 @@ type IdCursor = isize;
 #[derive(Clone, Copy, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Entity {
     generation: u32,
-    index: u32,
+    index: NonZeroU32,
 }
 
 pub(crate) enum AllocAtWithoutReplacement {
@@ -130,7 +130,11 @@ pub(crate) enum AllocAtWithoutReplacement {
 impl Entity {
     #[cfg(test)]
     pub(crate) const fn new(index: u32, generation: u32) -> Entity {
-        Entity { index, generation }
+        if let Some(index) = NonZeroU32::new(index) {
+            Entity { index, generation }
+        } else {
+            panic!("Cannot create entity with index == 0")
+        } 
     }
 
     /// An entity ID with a placeholder value. This may or may not correspond to an actual entity,
@@ -167,7 +171,11 @@ impl Entity {
     ///     }
     /// }
     /// ```
-    pub const PLACEHOLDER: Self = Self::from_raw(u32::MAX);
+    pub const PLACEHOLDER: Self = if let Some(index) = NonZeroU32::new(u32::MAX) {
+        Self::from_raw(index)
+    } else {
+        panic!("Could not create placeholder Entity, invalid index")
+    };
 
     /// Creates a new entity ID with the specified `index` and a generation of 0.
     ///
@@ -181,10 +189,34 @@ impl Entity {
     /// In general, one should not try to synchronize the ECS by attempting to ensure that
     /// `Entity` lines up between instances, but instead insert a secondary identifier as
     /// a component.
-    pub const fn from_raw(index: u32) -> Entity {
+    pub const fn from_raw(index: NonZeroU32) -> Entity {
         Entity {
             index,
             generation: 0,
+        }
+    }
+
+    /// Creates a new entity ID with the specified `index` and a generation of 0. Returns
+    /// `None` if index == 0.
+    ///
+    /// # Note
+    ///
+    /// Spawning a specific `entity` value is __rarely the right choice__. Most apps should favor
+    /// [`Commands::spawn`](crate::system::Commands::spawn). This method should generally
+    /// only be used for sharing entities across apps, and only when they have a scheme
+    /// worked out to share an index space (which doesn't happen by default).
+    ///
+    /// In general, one should not try to synchronize the ECS by attempting to ensure that
+    /// `Entity` lines up between instances, but instead insert a secondary identifier as
+    /// a component.
+    pub const fn try_from_raw(index: u32) -> Option<Entity> {
+        if let Some(index) = NonZeroU32::new(index) {
+            Some(Entity {
+                index,
+                generation: 0,
+            })
+        } else {
+            None
         }
     }
 
@@ -195,16 +227,31 @@ impl Entity {
     ///
     /// No particular structure is guaranteed for the returned bits.
     pub const fn to_bits(self) -> u64 {
-        (self.generation as u64) << 32 | self.index as u64
+        (self.generation as u64) << 32 | self.index.get() as u64
     }
 
     /// Reconstruct an `Entity` previously destructured with [`Entity::to_bits`].
     ///
     /// Only useful when applied to results from `to_bits` in the same instance of an application.
     pub const fn from_bits(bits: u64) -> Self {
-        Self {
-            generation: (bits >> 32) as u32,
-            index: bits as u32,
+        if let Some(result) = Self::try_from_bits(bits) {
+            result
+        } else {
+            panic!("Failed to create entity from bits, invalid index (must be >0)")
+        }
+    }
+
+    /// Reconstruct an `Entity` previously destructured with [`Entity::to_bits`].
+    ///
+    /// Only useful when applied to results from `to_bits` in the same instance of an application.
+    pub const fn try_from_bits(bits: u64) -> Option<Self> {
+        if let Some(index) = NonZeroU32::new(bits as u32) {
+            Some(Self {
+                generation: (bits >> 32) as u32,
+                index,
+            })
+        } else {
+            None
         }
     }
 
@@ -215,7 +262,7 @@ impl Entity {
     /// specific snapshot of the world, such as when serializing.
     #[inline]
     pub const fn index(self) -> u32 {
-        self.index
+        self.index.get()
     }
 
     /// Returns the generation of this Entity's index. The generation is incremented each time an
@@ -239,7 +286,7 @@ impl SparseSetIndex for Entity {
     }
 
     fn get_sparse_set_index(value: usize) -> Self {
-        Entity::from_raw(value as u32)
+        Entity::from_raw(NonZeroU32::new(value as u32).unwrap())
     }
 }
 
@@ -250,7 +297,7 @@ pub struct ReserveEntitiesIterator<'a> {
     meta: &'a [EntityMeta],
 
     // Reserved indices formerly in the freelist to hand out.
-    index_iter: std::slice::Iter<'a, u32>,
+    index_iter: std::slice::Iter<'a, NonZeroU32>,
 
     // New Entity indices to hand out, outside the range of meta.len().
     index_range: std::ops::Range<u32>,
@@ -260,16 +307,17 @@ impl<'a> Iterator for ReserveEntitiesIterator<'a> {
     type Item = Entity;
 
     fn next(&mut self) -> Option<Self::Item> {
+        // NAT-TODO confirm construction usage matches id > 0
         self.index_iter
             .next()
             .map(|&index| Entity {
-                generation: self.meta[index as usize].generation,
+                generation: self.meta[index.get() as usize].generation,
                 index,
             })
             .or_else(|| {
                 self.index_range.next().map(|index| Entity {
                     generation: 0,
-                    index,
+                    index: NonZeroU32::new(index).unwrap(),
                 })
             })
     }
@@ -330,16 +378,16 @@ pub struct Entities {
     /// and then from the new IDs, using only a single atomic subtract.
     ///
     /// Once `flush()` is done, `free_cursor` will equal `pending.len()`.
-    pending: Vec<u32>,
+    pending: Vec<NonZeroU32>,
     free_cursor: AtomicIdCursor,
     /// Stores the number of free entities for [`len`](Entities::len)
     len: u32,
 }
 
 impl Entities {
-    pub(crate) const fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Entities {
-            meta: Vec::new(),
+            meta: vec![EntityMeta{generation: 0, location: EntityLocation::INVALID}],
             pending: Vec::new(),
             free_cursor: AtomicIdCursor::new(0),
             len: 0,
@@ -401,7 +449,7 @@ impl Entities {
             // Allocate from the freelist.
             let index = self.pending[(n - 1) as usize];
             Entity {
-                generation: self.meta[index as usize].generation,
+                generation: self.meta[index.get() as usize].generation,
                 index,
             }
         } else {
@@ -412,7 +460,7 @@ impl Entities {
             // and farther beyond `meta.len()`.
             Entity {
                 generation: 0,
-                index: u32::try_from(self.meta.len() as IdCursor - n).expect("too many entities"),
+                index: NonZeroU32::new(u32::try_from(self.meta.len() as IdCursor - n).expect("too many entities")).unwrap(),
             }
         }
     }
@@ -433,7 +481,7 @@ impl Entities {
             let new_free_cursor = self.pending.len() as IdCursor;
             *self.free_cursor.get_mut() = new_free_cursor;
             Entity {
-                generation: self.meta[index as usize].generation,
+                generation: self.meta[index.get() as usize].generation,
                 index,
             }
         } else {
@@ -441,7 +489,7 @@ impl Entities {
             self.meta.push(EntityMeta::EMPTY);
             Entity {
                 generation: 0,
-                index,
+                index: NonZeroU32::new(index).unwrap(),
             }
         }
     }
@@ -453,12 +501,12 @@ impl Entities {
     pub fn alloc_at(&mut self, entity: Entity) -> Option<EntityLocation> {
         self.verify_flushed();
 
-        let loc = if entity.index as usize >= self.meta.len() {
-            self.pending.extend((self.meta.len() as u32)..entity.index);
+        let loc = if entity.index() as usize >= self.meta.len() {
+            self.pending.extend(((self.meta.len() as u32)..entity.index()).map(|v| NonZeroU32::new(v).unwrap()));
             let new_free_cursor = self.pending.len() as IdCursor;
             *self.free_cursor.get_mut() = new_free_cursor;
             self.meta
-                .resize(entity.index as usize + 1, EntityMeta::EMPTY);
+                .resize(entity.index() as usize + 1, EntityMeta::EMPTY);
             self.len += 1;
             None
         } else if let Some(index) = self.pending.iter().position(|item| *item == entity.index) {
@@ -469,12 +517,12 @@ impl Entities {
             None
         } else {
             Some(mem::replace(
-                &mut self.meta[entity.index as usize].location,
+                &mut self.meta[entity.index() as usize].location,
                 EntityMeta::EMPTY.location,
             ))
         };
 
-        self.meta[entity.index as usize].generation = entity.generation;
+        self.meta[entity.index() as usize].generation = entity.generation;
 
         loc
     }
@@ -488,12 +536,12 @@ impl Entities {
     ) -> AllocAtWithoutReplacement {
         self.verify_flushed();
 
-        let result = if entity.index as usize >= self.meta.len() {
-            self.pending.extend((self.meta.len() as u32)..entity.index);
+        let result = if entity.index() as usize >= self.meta.len() {
+            self.pending.extend(((self.meta.len() as u32)..entity.index()).map(|v| NonZeroU32::new(v).unwrap()));
             let new_free_cursor = self.pending.len() as IdCursor;
             *self.free_cursor.get_mut() = new_free_cursor;
             self.meta
-                .resize(entity.index as usize + 1, EntityMeta::EMPTY);
+                .resize(entity.index() as usize + 1, EntityMeta::EMPTY);
             self.len += 1;
             AllocAtWithoutReplacement::DidNotExist
         } else if let Some(index) = self.pending.iter().position(|item| *item == entity.index) {
@@ -503,7 +551,7 @@ impl Entities {
             self.len += 1;
             AllocAtWithoutReplacement::DidNotExist
         } else {
-            let current_meta = &self.meta[entity.index as usize];
+            let current_meta = &self.meta[entity.index() as usize];
             if current_meta.location.archetype_id == ArchetypeId::INVALID {
                 AllocAtWithoutReplacement::DidNotExist
             } else if current_meta.generation == entity.generation {
@@ -513,7 +561,7 @@ impl Entities {
             }
         };
 
-        self.meta[entity.index as usize].generation = entity.generation;
+        self.meta[entity.index() as usize].generation = entity.generation;
         result
     }
 
@@ -523,7 +571,7 @@ impl Entities {
     pub fn free(&mut self, entity: Entity) -> Option<EntityLocation> {
         self.verify_flushed();
 
-        let meta = &mut self.meta[entity.index as usize];
+        let meta = &mut self.meta[entity.index() as usize];
         if meta.generation != entity.generation {
             return None;
         }
@@ -571,7 +619,7 @@ impl Entities {
     /// Returns the location of an [`Entity`].
     /// Note: for pending entities, returns `Some(EntityLocation::INVALID)`.
     pub fn get(&self, entity: Entity) -> Option<EntityLocation> {
-        if let Some(meta) = self.meta.get(entity.index as usize) {
+        if let Some(meta) = self.meta.get(entity.index() as usize) {
             if meta.generation != entity.generation
                 || meta.location.archetype_id == ArchetypeId::INVALID
             {
@@ -603,18 +651,22 @@ impl Entities {
     /// entities, since it checks the generation
     pub fn resolve_from_id(&self, index: u32) -> Option<Entity> {
         let idu = index as usize;
-        if let Some(&EntityMeta { generation, .. }) = self.meta.get(idu) {
-            Some(Entity { generation, index })
+        if let Some(index) = NonZeroU32::new(index) {
+            if let Some(&EntityMeta { generation, .. }) = self.meta.get(idu) {
+                Some(Entity { generation, index })
+            } else {
+                // `id` is outside of the meta list - check whether it is reserved but not yet flushed.
+                let free_cursor = self.free_cursor.load(Ordering::Relaxed);
+                // If this entity was manually created, then free_cursor might be positive
+                // Returning None handles that case correctly
+                let num_pending = usize::try_from(-free_cursor).ok()?;
+                (idu < self.meta.len() + num_pending).then_some(Entity {
+                    generation: 0,
+                    index,
+                })
+            }
         } else {
-            // `id` is outside of the meta list - check whether it is reserved but not yet flushed.
-            let free_cursor = self.free_cursor.load(Ordering::Relaxed);
-            // If this entity was manually created, then free_cursor might be positive
-            // Returning None handles that case correctly
-            let num_pending = usize::try_from(-free_cursor).ok()?;
-            (idu < self.meta.len() + num_pending).then_some(Entity {
-                generation: 0,
-                index,
-            })
+            None
         }
     }
 
@@ -646,7 +698,7 @@ impl Entities {
             for (index, meta) in self.meta.iter_mut().enumerate().skip(old_meta_len) {
                 init(
                     Entity {
-                        index: index as u32,
+                        index: NonZeroU32::new(index as u32).unwrap(),
                         generation: meta.generation,
                     },
                     &mut meta.location,
@@ -659,7 +711,7 @@ impl Entities {
 
         self.len += (self.pending.len() - new_free_cursor) as u32;
         for index in self.pending.drain(new_free_cursor..) {
-            let meta = &mut self.meta[index as usize];
+            let meta = &mut self.meta[index.get() as usize];
             init(
                 Entity {
                     index,
@@ -790,7 +842,7 @@ mod tests {
     fn entity_bits_roundtrip() {
         let e = Entity {
             generation: 0xDEADBEEF,
-            index: 0xBAADF00D,
+            index: NonZeroU32::new(0xBAADF00D).unwrap(),
         };
         assert_eq!(Entity::from_bits(e.to_bits()), e);
     }
@@ -824,18 +876,18 @@ mod tests {
 
     #[test]
     fn entity_const() {
-        const C1: Entity = Entity::from_raw(42);
-        assert_eq!(42, C1.index);
+        const C1: Entity = if let Some(entity) = Entity::try_from_raw(42) { entity } else { panic!("Failed to create entity") };
+        assert_eq!(42, C1.index.get());
         assert_eq!(0, C1.generation);
 
         const C2: Entity = Entity::from_bits(0x0000_00ff_0000_00cc);
-        assert_eq!(0x0000_00cc, C2.index);
+        assert_eq!(0x0000_00cc, C2.index.get());
         assert_eq!(0x0000_00ff, C2.generation);
 
-        const C3: u32 = Entity::from_raw(33).index();
+        const C3: u32 = if let Some(entity) = Entity::try_from_raw(33) { entity.index() } else { panic!("Failed to create entity") };
         assert_eq!(33, C3);
 
-        const C4: u32 = Entity::from_bits(0x00dd_00ff_0000_0000).generation();
+        const C4: u32 = Entity::from_bits(0x00dd_00ff_0000_0001).generation();
         assert_eq!(0x00dd_00ff, C4);
     }
 }
