@@ -307,7 +307,6 @@ impl<'a> Iterator for ReserveEntitiesIterator<'a> {
     type Item = Entity;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // NAT-TODO confirm construction usage matches id > 0
         self.index_iter
             .next()
             .map(|&index| Entity {
