@@ -932,7 +932,10 @@ mod tests {
         let mut builder = TableBuilder::with_capacity(0, columns.len());
         builder.add_column(components.get_info(component_id).unwrap());
         let mut table = builder.build();
-        let entities = (0..200).map(Entity::from_raw).collect::<Vec<_>>();
+        let entities = (1..=200)
+            .map(Entity::from_raw)
+            .map(Option::unwrap)
+            .collect::<Vec<_>>();
         for entity in &entities {
             // SAFETY: we allocate and immediately set data afterwards
             unsafe {

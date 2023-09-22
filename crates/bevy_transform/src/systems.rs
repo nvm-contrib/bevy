@@ -411,8 +411,8 @@ mod test {
         let translation = vec3(1.0, 0.0, 0.0);
 
         // These will be overwritten.
-        let mut child = Entity::from_raw(0);
-        let mut grandchild = Entity::from_raw(1);
+        let mut child = Entity::from_raw(1).unwrap();
+        let mut grandchild = Entity::from_raw(2).unwrap();
         let parent = app
             .world
             .spawn((
@@ -455,7 +455,7 @@ mod test {
         app.add_systems(Update, (propagate_transforms, sync_simple_transforms));
 
         fn setup_world(world: &mut World) -> (Entity, Entity) {
-            let mut grandchild = Entity::from_raw(0);
+            let mut grandchild = Entity::from_raw(1).unwrap();
             let child = world
                 .spawn(TransformBundle::IDENTITY)
                 .with_children(|builder| {

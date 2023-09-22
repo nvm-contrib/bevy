@@ -318,7 +318,7 @@ impl<Q: WorldQuery, F: ReadOnlyWorldQuery> QueryState<Q, F> {
     ///
     /// assert_eq!(component_values, [&A(0), &A(1), &A(2)]);
     ///
-    /// let wrong_entity = Entity::from_raw(365);
+    /// let wrong_entity = Entity::from_raw(365).unwrap();
     ///
     /// assert_eq!(query_state.get_many(&world, [wrong_entity]), Err(QueryEntityError::NoSuchEntity(wrong_entity)));
     /// ```
@@ -393,7 +393,7 @@ impl<Q: WorldQuery, F: ReadOnlyWorldQuery> QueryState<Q, F> {
     ///
     /// assert_eq!(component_values, [&A(5), &A(6), &A(7)]);
     ///
-    /// let wrong_entity = Entity::from_raw(57);
+    /// let wrong_entity = Entity::from_raw(57).unwrap();
     /// let invalid_entity = world.spawn_empty().id();
     ///
     /// assert_eq!(query_state.get_many_mut(&mut world, [wrong_entity]).unwrap_err(), QueryEntityError::NoSuchEntity(wrong_entity));
@@ -1516,7 +1516,7 @@ mod tests {
         let world_2 = World::new();
 
         let mut query_state = world_1.query::<Entity>();
-        let _panics = query_state.get(&world_2, Entity::from_raw(0));
+        let _panics = query_state.get(&world_2, Entity::from_raw(1).unwrap());
     }
 
     #[test]

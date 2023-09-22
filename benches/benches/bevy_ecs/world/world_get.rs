@@ -51,8 +51,8 @@ pub fn world_entity(criterion: &mut Criterion) {
             let world = setup::<Table>(entity_count);
 
             bencher.iter(|| {
-                for i in 0..entity_count {
-                    let entity = Entity::from_raw(i);
+                for i in 1..=entity_count {
+                    let entity = Entity::from_raw(i).unwrap();
                     black_box(world.entity(entity));
                 }
             });
@@ -72,8 +72,8 @@ pub fn world_get(criterion: &mut Criterion) {
             let world = setup::<Table>(entity_count);
 
             bencher.iter(|| {
-                for i in 0..entity_count {
-                    let entity = Entity::from_raw(i);
+                for i in 1..=entity_count {
+                    let entity = Entity::from_raw(i).unwrap();
                     assert!(world.get::<Table>(entity).is_some());
                 }
             });
@@ -82,8 +82,8 @@ pub fn world_get(criterion: &mut Criterion) {
             let world = setup::<Sparse>(entity_count);
 
             bencher.iter(|| {
-                for i in 0..entity_count {
-                    let entity = Entity::from_raw(i);
+                for i in 1..=entity_count {
+                    let entity = Entity::from_raw(i).unwrap();
                     assert!(world.get::<Sparse>(entity).is_some());
                 }
             });
@@ -104,8 +104,8 @@ pub fn world_query_get(criterion: &mut Criterion) {
             let mut query = world.query::<&Table>();
 
             bencher.iter(|| {
-                for i in 0..entity_count {
-                    let entity = Entity::from_raw(i);
+                for i in 1..=entity_count {
+                    let entity = Entity::from_raw(i).unwrap();
                     assert!(query.get(&world, entity).is_ok());
                 }
             });
@@ -129,8 +129,8 @@ pub fn world_query_get(criterion: &mut Criterion) {
             )>();
 
             bencher.iter(|| {
-                for i in 0..entity_count {
-                    let entity = Entity::from_raw(i);
+                for i in 1..=entity_count {
+                    let entity = Entity::from_raw(i).unwrap();
                     assert!(query.get(&world, entity).is_ok());
                 }
             });
@@ -140,8 +140,8 @@ pub fn world_query_get(criterion: &mut Criterion) {
             let mut query = world.query::<&Sparse>();
 
             bencher.iter(|| {
-                for i in 0..entity_count {
-                    let entity = Entity::from_raw(i);
+                for i in 1..=entity_count {
+                    let entity = Entity::from_raw(i).unwrap();
                     assert!(query.get(&world, entity).is_ok());
                 }
             });
@@ -167,8 +167,8 @@ pub fn world_query_get(criterion: &mut Criterion) {
                 )>();
 
                 bencher.iter(|| {
-                    for i in 0..entity_count {
-                        let entity = Entity::from_raw(i);
+                    for i in 1..=entity_count {
+                        let entity = Entity::from_raw(i).unwrap();
                         assert!(query.get(&world, entity).is_ok());
                     }
                 });

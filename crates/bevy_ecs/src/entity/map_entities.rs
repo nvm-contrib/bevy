@@ -108,7 +108,7 @@ impl<'m> EntityMapper<'m> {
         // SAFETY: Entities data is kept in a valid state via `EntityMap::world_scope`
         let entities = unsafe { world.entities_mut() };
         assert!(entities.free(self.dead_start).is_some());
-        assert!(entities.reserve_generations(self.dead_start.index, self.generations));
+        assert!(entities.reserve_generations(self.dead_start.index(), self.generations));
     }
 
     /// Creates an [`EntityMapper`] from a provided [`World`] and [`HashMap<Entity, Entity>`], then calls the
@@ -131,6 +131,8 @@ impl<'m> EntityMapper<'m> {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroU32;
+
     use bevy_utils::HashMap;
 
     use crate::{
@@ -140,8 +142,16 @@ mod tests {
 
     #[test]
     fn entity_mapper() {
-        const FIRST_IDX: u32 = 1;
-        const SECOND_IDX: u32 = 2;
+        const FIRST_IDX: NonZeroU32 = if let Some(v) = NonZeroU32::new(1) {
+            v
+        } else {
+            panic!("1 != 0")
+        };
+        const SECOND_IDX: NonZeroU32 = if let Some(v) = NonZeroU32::new(2) {
+            v
+        } else {
+            panic!("2 != 0")
+        };
 
         let mut map = HashMap::default();
         let mut world = World::new();
@@ -174,7 +184,7 @@ mod tests {
         let mut world = World::new();
 
         let dead_ref = EntityMapper::world_scope(&mut map, &mut world, |_, mapper| {
-            mapper.get_or_reserve(Entity::new(0, 0))
+            mapper.get_or_reserve(Entity::new(NonZeroU32::MIN, 0))
         });
 
         // Next allocated entity should be a further generation on the same index
